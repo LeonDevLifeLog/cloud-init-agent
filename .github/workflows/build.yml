@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # 纯文档改动不触发镜像重建。注意：paths-ignore 对 tag push 同样生效——
+    # 若某个 vX.Y.Z tag 恰好落在只改文档的提交上，发布会被跳过；届时在代码提交上打 tag
+    # 或补一个空提交即可。
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
