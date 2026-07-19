@@ -31,7 +31,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}/agent-env
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=${{ matrix.target }}
             type=sha,prefix=${{ matrix.target }}-
