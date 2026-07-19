@@ -7,6 +7,7 @@ ARG JAVA_VERSION=21.0.6+7
 ARG YQ_VERSION=4.45.1
 ARG GLAB_VERSION=1.108.0
 ARG MULTICA_VERSION=0.4.4
+ARG XCMD_VERSION=v0.9.13
 ARG TARGETARCH=amd64
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -104,4 +105,10 @@ COPY --chown=agent:agent rootfs/home/ /home/agent/
 
 USER agent
 WORKDIR /home/agent
+
+# ---- x-cmd (POSIX shell 工具集，per-user 安装到 $HOME/.x-cmd.root) ----
+# 必须在 USER agent + COPY dotfiles 之后：它写 $HOME 并向 .bashrc 追加激活行
+RUN ___X_CMD_TOINSTALL_VERSION="${XCMD_VERSION}" ___X_CMD_XBINEXP_EXIT=1 \
+      sh -c "$(curl -fsSL https://get.x-cmd.com)"
+
 CMD ["/bin/bash"]
