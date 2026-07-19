@@ -1,9 +1,7 @@
 FROM ubuntu:24.04
 
 # ---- 版本锚定（改这里即可升级） ----
-ARG NODE_VERSION=22.14.0
-ARG GO_VERSION=1.23.6
-ARG JAVA_VERSION=21.0.6+7
+# Java/Node 改用 apt（Ubuntu 默认源），Go 改用 x-cmd 安装，故不再 pin 这三者版本
 ARG YQ_VERSION=4.45.1
 ARG GLAB_VERSION=1.108.0
 ARG MULTICA_VERSION=0.4.4
@@ -26,6 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config make cmake gcc g++ \
     # Python（运行时 + venv）
       python3 python3-pip python3-venv \
+    # Java（Ubuntu 默认源 OpenJDK 21）
+      openjdk-21-jdk \
+    # Node.js（Ubuntu 默认源 + npm）
+      nodejs npm \
     # 网络诊断
       iputils-ping dnsutils net-tools netcat-openbsd traceroute rsync openssh-client \
     # 文本/搜索/JSON
@@ -45,24 +47,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---- uv (Python 包管理，pin 版本) ----
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# ---- Go ----
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
-      | tar -C /usr/local -xz
-ENV PATH="/usr/local/go/bin:${PATH}"
+# ---- Java (Ubuntu OpenJDK 21，apt 已装，仅设 JAVA_HOME) ----
+ENV JAVA_HOME="/usr/lib/jvm/java-21-openjdk-${TARGETARCH}"
 
-# ---- Java (Temurin) ----
-RUN set -eux; \
-    JV="$(echo "$JAVA_VERSION" | tr '+' '_')"; \
-    curl -fsSL "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JAVA_VERSION}/OpenJDK21U-jdk_x64_linux_hotspot_${JV}.tar.gz" \
-      | tar -C /opt -xz && mv /opt/jdk-* /opt/java
-ENV JAVA_HOME=/opt/java
-ENV PATH="/opt/java/bin:${PATH}"
-
-# ---- Node.js ----
-RUN set -eux; \
-    ARCH_NODE=$([ "$TARGETARCH" = "amd64" ] && echo x64 || echo arm64); \
-    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH_NODE}.tar.xz" \
-      | tar -C /usr/local --strip-components=1 -xJ
+# ---- Node.js (Ubuntu 默认源已装，补 pnpm) ----
 RUN npm install -g pnpm
 
 # ---- GitHub CLI (gh) ----
@@ -113,5 +101,16 @@ WORKDIR /home/agent
 RUN ___X_CMD_TOINSTALL_VERSION="${XCMD_VERSION}" ___X_CMD_XBINEXP_EXIT=1 \
       sh -c "$(curl -fsSL https://get.x-cmd.com)" || true; \
     test -e "$HOME/.x-cmd.root/X"
+
+# ---- Go (通过 x-cmd 安装) ----
+# x-cmd 仅在交互式 shell 激活，故装完后把真实二进制符号链接到 /usr/local/bin，
+# 保证 `docker run img go build` 这类非交互调用也能用（go 会顺着 symlink 解析 GOROOT）。
+RUN set -eux; \
+    . "$HOME/.x-cmd.root/X"; \
+    x env use go; \
+    gobin="$(go env GOROOT)/bin"; \
+    sudo ln -sf "$gobin/go" /usr/local/bin/go; \
+    sudo ln -sf "$gobin/gofmt" /usr/local/bin/gofmt; \
+    go version
 
 CMD ["/bin/bash"]

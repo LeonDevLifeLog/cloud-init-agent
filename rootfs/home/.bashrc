@@ -23,11 +23,10 @@ fi
 # 提示符
 PS1='\[\e[32m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
 
-# PATH：语言工具链 + 用户本地 bin
-export PATH="$HOME/.local/bin:/usr/local/go/bin:/opt/java/bin:$PATH"
+# PATH：用户本地 bin + Go 工作区
+export PATH="$HOME/.local/bin:$PATH"
 export GOPATH="$HOME/go"
 export PATH="$GOPATH/bin:$PATH"
-export JAVA_HOME=/opt/java
 
 # Ubuntu 下 bat/fd 的可执行名是 batcat/fdfind，补回常用名
 alias bat='batcat'
