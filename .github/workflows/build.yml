@@ -13,6 +13,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [base, node, go, java, full]
     steps:
       - uses: actions/checkout@v4
 
@@ -29,15 +33,16 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/agent-env
           tags: |
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
+            type=raw,value=${{ matrix.target }}
+            type=sha,prefix=${{ matrix.target }}-
+            type=raw,value=latest,enable=${{ matrix.target == 'full' }}
 
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

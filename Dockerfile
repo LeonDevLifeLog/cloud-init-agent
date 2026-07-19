@@ -1,7 +1,10 @@
-FROM ubuntu:24.04
+# =====================================================================
+# base —— 系统 CLI + Python + 三个包管理器入口(apt/x-cmd/brew) + agent 用户
+#         不含 Node/Go/Java 语言 SDK（各自独立 stage）
+# =====================================================================
+FROM ubuntu:24.04 AS base
 
 # ---- 版本锚定（改这里即可升级） ----
-# Java/Node 改用 apt（Ubuntu 默认源），Go 改用 x-cmd 安装，故不再 pin 这三者版本
 ARG YQ_VERSION=4.45.1
 ARG GLAB_VERSION=1.108.0
 ARG MULTICA_VERSION=0.4.4
@@ -13,7 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     TZ=Asia/Shanghai
 
-# ---- 基础系统包 + 常用 CLI ----
+# ---- 基础系统包 + 常用 CLI + Python ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # 基础/证书/权限
       ca-certificates curl wget gnupg sudo \
@@ -22,12 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git git-lfs \
     # 构建工具链
       build-essential pkg-config make cmake gcc g++ \
-    # Python（运行时 + venv）
+    # Python（运行时 + venv，随 base）
       python3 python3-pip python3-venv \
-    # Java（Ubuntu 默认源 OpenJDK 21）
-      openjdk-21-jdk \
-    # Node.js（Ubuntu 默认源 + npm）
-      nodejs npm \
     # 网络诊断
       iputils-ping dnsutils net-tools netcat-openbsd traceroute rsync openssh-client \
     # 文本/搜索/JSON
@@ -44,14 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       locales tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- uv (Python 包管理，pin 版本) ----
+# ---- uv (Python 包管理) ----
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
-
-# ---- Java (Ubuntu OpenJDK 21，apt 已装，仅设 JAVA_HOME) ----
-ENV JAVA_HOME="/usr/lib/jvm/java-21-openjdk-${TARGETARCH}"
-
-# ---- Node.js (Ubuntu 默认源已装，补 pnpm) ----
-RUN npm install -g pnpm
 
 # ---- GitHub CLI (gh) ----
 RUN set -eux; \
@@ -88,6 +81,10 @@ RUN useradd -ms /bin/bash agent \
     && echo 'agent ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/agent \
     && chmod 0440 /etc/sudoers.d/agent
 
+# ---- 语言安装脚本（供各语言 stage 复用）----
+COPY scripts/ /opt/scripts/
+RUN chmod +x /opt/scripts/*.sh
+
 # ---- 常见配置（dotfiles）----
 COPY --chown=agent:agent rootfs/home/ /home/agent/
 
@@ -102,23 +99,9 @@ RUN ___X_CMD_TOINSTALL_VERSION="${XCMD_VERSION}" ___X_CMD_XBINEXP_EXIT=1 \
       sh -c "$(curl -fsSL https://get.x-cmd.com)" || true; \
     test -e "$HOME/.x-cmd.root/X"
 
-# ---- Go (通过 x-cmd 安装) ----
-# x-cmd 仅在交互式 shell 激活，故装完后把真实二进制符号链接到 /usr/local/bin，
-# 保证 `docker run img go build` 这类非交互调用也能用（go 会顺着 symlink 解析 GOROOT）。
-RUN set -ex; \
-    export ___X_CMD_ROOT="$HOME/.x-cmd.root"; \
-    . "$___X_CMD_ROOT/X"; \
-    x env use go; \
-    gobin="$(go env GOROOT)/bin"; \
-    sudo ln -sf "$gobin/go" /usr/local/bin/go; \
-    sudo ln -sf "$gobin/gofmt" /usr/local/bin/gofmt; \
-    go version
-
-# ---- Homebrew (Linuxbrew，以 agent 用户安装到 /home/linuxbrew/.linuxbrew) ----
-# 需非 root + 免密 sudo（agent 已满足）；NONINTERACTIVE=1 走非交互安装。
+# ---- Homebrew (Linuxbrew，以 agent 用户安装) ----
 RUN NONINTERACTIVE=1 /bin/bash -c \
       "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-# 把 brew 放进全局环境，保证非交互调用（docker run img brew ...）也能用
 ENV HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew \
     HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar \
     HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew \
@@ -126,4 +109,32 @@ ENV HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew \
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 RUN brew --version
 
+CMD ["/bin/bash"]
+
+# =====================================================================
+# 单语言 stage —— 各自 FROM base 叠加一种语言
+# =====================================================================
+FROM base AS node
+RUN /opt/scripts/install-node.sh
+CMD ["/bin/bash"]
+
+FROM base AS java
+ARG TARGETARCH=amd64
+RUN /opt/scripts/install-java.sh
+ENV JAVA_HOME="/usr/lib/jvm/java-21-openjdk-${TARGETARCH}"
+CMD ["/bin/bash"]
+
+FROM base AS go
+RUN /opt/scripts/install-go.sh
+CMD ["/bin/bash"]
+
+# =====================================================================
+# full —— base + Node + Go + Java（Python 已在 base）；latest 指向它
+# =====================================================================
+FROM base AS full
+ARG TARGETARCH=amd64
+RUN /opt/scripts/install-node.sh \
+    && /opt/scripts/install-java.sh \
+    && /opt/scripts/install-go.sh
+ENV JAVA_HOME="/usr/lib/jvm/java-21-openjdk-${TARGETARCH}"
 CMD ["/bin/bash"]
