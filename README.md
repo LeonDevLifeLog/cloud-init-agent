@@ -65,8 +65,8 @@ docker run -it --rm -v "$PWD":/home/agent/work -w /home/agent/work \
 
 正式发布（`vX.Y.Z`）：
 - `latest` —— 最新正式发布的 `full`
-- `X.Y.Z` —— 该版本的 `full`（如 `1.2.3`）
-- `<target>-X.Y.Z` —— 各分层的该版本（如 `go-1.2.3`、`base-1.2.3`）
+- `vX.Y.Z` —— 该版本的 `full`（如 `v1.2.3`）
+- `<target>-vX.Y.Z` —— 各分层的该版本（如 `go-v1.2.3`、`base-v1.2.3`）
 - `base` / `node` / `go` / `java` / `full` —— 各分层滚动指向最新正式发布
 
 edge（`main`）：
@@ -75,8 +75,9 @@ edge（`main`）：
 通用（两条线都有）：
 - `<target>-<gitsha>` —— 锁定到具体提交与分层，可复现（如 `go-00600e3`）
 
+> **版本号规范：`v<x.y.z>`，`v` 不可省略**，镜像版本 tag 与 git tag 完全一致。
 > 镜像内嵌版本信息：环境变量 `AGENT_RUNTIME_VERSION` 与 OCI label
-> `org.opencontainers.image.version`（`docker inspect` 可查；edge 构建为 `0.0.0-edge.<sha>`）。
+> `org.opencontainers.image.version`（`docker inspect` 可查；edge 构建为 `v0.0.0-edge.<sha>`）。
 
 ## 认证 / 凭据注入
 
@@ -120,7 +121,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-CI 会产出 `0.1.0` / `latest` / `<target>-0.1.0` 等 tag，并在 GitHub Releases 生成对应条目。
+CI 会产出 `v0.1.0` / `latest` / `<target>-v0.1.0` 等 tag，并在 GitHub Releases 生成对应条目。
 main 分支的日常提交只产出 `<target>-edge` 与 `<target>-<sha>`，不影响 `latest`。
 
 ## 目录结构
