@@ -6,6 +6,7 @@ ARG GO_VERSION=1.23.6
 ARG JAVA_VERSION=21.0.6+7
 ARG YQ_VERSION=4.45.1
 ARG GLAB_VERSION=1.108.0
+ARG MULTICA_VERSION=0.4.4
 ARG TARGETARCH=amd64
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -86,6 +87,12 @@ RUN set -eux; \
       | tar -C /tmp -xz; \
     install -m 755 /tmp/bin/glab /usr/local/bin/glab; \
     rm -rf /tmp/bin
+
+# ---- multica CLI (managed agents platform) ----
+RUN set -eux; \
+    curl -fsSL "https://github.com/multica-ai/multica/releases/download/v${MULTICA_VERSION}/multica-cli-${MULTICA_VERSION}-linux-${TARGETARCH}.tar.gz" \
+      | tar -C /usr/local/bin -xz multica; \
+    chmod +x /usr/local/bin/multica
 
 # ---- 非 root 用户 ----
 RUN useradd -ms /bin/bash agent \
